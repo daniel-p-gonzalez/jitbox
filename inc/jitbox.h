@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 
 #include <memory.h>
 #include <sys/mman.h>
@@ -102,101 +103,56 @@ class Module;
 // owns its own args/locals/code gen, copied to module on finalize
 class Function;
 
-// TODO: move mprotect to module, have functions own (dynamically allocated) mem
-class X64CodeGenerator
+class CodeGenerator
 {
 public:
-    X64CodeGenerator()
+    CodeGenerator() : m_mem(nullptr) {}
+    virtual ~CodeGenerator()
     {
-        m_base = m_ip = (u8*)mmap(0, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        memset(m_base, (u8)0xc3, PAGE_SIZE);
-    }
-
-    ~X64CodeGenerator()
-    {
-        munmap(m_base, PAGE_SIZE);
-        m_base = m_ip = nullptr;
+      munmap(m_mem, PAGE_SIZE);
+      m_mem = nullptr;
     }
 
     void finalize()
     {
-        mprotect(m_base, PAGE_SIZE, PROT_READ | PROT_EXEC);
+        m_mem = (u8*)mmap(0, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        memcpy(m_mem, &m_code[0], m_code.size());
+        mprotect(m_mem, PAGE_SIZE, PROT_READ | PROT_EXEC);
     }
 
-    void mov(Register reg, void* address)
-    {
-        switch(reg)
-        {
-            case Register::rax: EmitByte(0x48); EmitByte(0xb8); break;
-            case Register::rbx: EmitByte(0x48); EmitByte(0xbb); break;
-            case Register::rcx: EmitByte(0x48); EmitByte(0xb9); break;
-            case Register::rdx: EmitByte(0x48); EmitByte(0xba); break;
-            case Register::rdi: EmitByte(0x48); EmitByte(0xbf); break;
-            case Register::rsi: EmitByte(0x48); EmitByte(0xbe); break;
-            case Register::rsp: EmitByte(0x48); EmitByte(0xbc); break;
-            case Register::rbp: EmitByte(0x48); EmitByte(0xbd); break;
-            case Register::r8:  EmitByte(0x49); EmitByte(0xb8); break;
-            case Register::r9:  EmitByte(0x49); EmitByte(0xb9); break;
-            case Register::r10: EmitByte(0x49); EmitByte(0xba); break;
-            case Register::r11: EmitByte(0x49); EmitByte(0xbb); break;
-            case Register::r12: EmitByte(0x49); EmitByte(0xbc); break;
-            case Register::r13: EmitByte(0x49); EmitByte(0xbd); break;
-            case Register::r14: EmitByte(0x49); EmitByte(0xbe); break;
-            case Register::r15: EmitByte(0x49); EmitByte(0xbf); break;
-            default: assert(false && "Unhandled register in mov(reg, address)"); break;
-        }
-        EmitAddress(address);
-    }
-
-    void call(Register reg)
-    {
-        switch(reg)
-        {
-            case Register::rax: EmitByte(0xff); EmitByte(0xd0); break;
-            case Register::rbx: EmitByte(0xff); EmitByte(0xd3); break;
-            case Register::rcx: EmitByte(0xff); EmitByte(0xd1); break;
-            case Register::rdx: EmitByte(0xff); EmitByte(0xd2); break;
-            case Register::rdi: EmitByte(0xff); EmitByte(0xd7); break;
-            case Register::rsi: EmitByte(0xff); EmitByte(0xd6); break;
-            case Register::rsp: EmitByte(0xff); EmitByte(0xd4); break;
-            case Register::rbp: EmitByte(0xff); EmitByte(0xd5); break;
-            case Register::r8:  EmitByte(0x41); EmitByte(0xff); EmitByte(0xd0); break;
-            case Register::r9:  EmitByte(0x41); EmitByte(0xff); EmitByte(0xd1); break;
-            case Register::r10: EmitByte(0x41); EmitByte(0xff); EmitByte(0xd2); break;
-            case Register::r11: EmitByte(0x41); EmitByte(0xff); EmitByte(0xd3); break;
-            case Register::r12: EmitByte(0x41); EmitByte(0xff); EmitByte(0xd4); break;
-            case Register::r13: EmitByte(0x41); EmitByte(0xff); EmitByte(0xd5); break;
-            case Register::r14: EmitByte(0x41); EmitByte(0xff); EmitByte(0xd6); break;
-            case Register::r15: EmitByte(0x41); EmitByte(0xff); EmitByte(0xd7); break;
-            default: assert(false && "Unhandled register in mov(reg, address)"); break;
-        }
-    }
-
+    virtual void mov(Register reg, void* address) = 0;
+    virtual void call(Register reg) = 0;
     // call to (already loaded) c function
-    void ccall(Register reg, void* address)
-    {
-        mov(reg, address);
-        call(reg);
-    }
-
-    void ret()
-    {
-        EmitByte(0xc3);
-    }
-
-    // temp hack to get work out end-to-end details
+    virtual void ccall(Register reg, void* address) = 0;
+    virtual void ret() = 0;
+    // temp hack to work out end-to-end details
     typedef void (*BareFunction) (void);
     void run()
     {
-        BareFunction fun = (BareFunction)m_base;
+        BareFunction fun = (BareFunction)m_mem;
         fun();
     }
 
-private:
+protected:
     void EmitByte(u8 byte)
     {
 //        printf("%hhX ", byte);
-        *m_ip++ = byte;
+        m_code.push_back(byte);
+    }
+
+    void EmitWord(u16 word)
+    {
+//        printf("%hhX ", byte);
+        m_code.push_back((u8)(word >> 8));
+        m_code.push_back((u8)(word));
+    }
+
+    void Emit3Bytes(u32 dword)
+    {
+//        printf("%hhX ", byte);
+        m_code.push_back((u8)(dword >> 16));
+        m_code.push_back((u8)(dword >> 8));
+        m_code.push_back((u8)(dword));
     }
 
     void EmitAddress(void* _address)
@@ -213,9 +169,75 @@ private:
     }
 
 private:
+    std::vector<u8> m_code;
     const size_t PAGE_SIZE = 4096;
-    u8* m_base;
-    u8* m_ip;
+    u8* m_mem;
+};
+
+// TODO: move mprotect to module, have functions own (dynamically allocated) mem
+class X64CodeGenerator : public CodeGenerator
+{
+public:
+    void mov(Register reg, void* address)
+    {
+        switch(reg)
+        {
+            case Register::rax: EmitWord(0x48b8); break;
+            case Register::rbx: EmitWord(0x48bb); break;
+            case Register::rcx: EmitWord(0x48b9); break;
+            case Register::rdx: EmitWord(0x48ba); break;
+            case Register::rdi: EmitWord(0x48bf); break;
+            case Register::rsi: EmitWord(0x48be); break;
+            case Register::rsp: EmitWord(0x48bc); break;
+            case Register::rbp: EmitWord(0x48bd); break;
+            case Register::r8:  EmitWord(0x49b8); break;
+            case Register::r9:  EmitWord(0x49b9); break;
+            case Register::r10: EmitWord(0x49ba); break;
+            case Register::r11: EmitWord(0x49bb); break;
+            case Register::r12: EmitWord(0x49bc); break;
+            case Register::r13: EmitWord(0x49bd); break;
+            case Register::r14: EmitWord(0x49be); break;
+            case Register::r15: EmitWord(0x49bf); break;
+            default: assert(false && "Unhandled register in mov(reg, address)"); break;
+        }
+        EmitAddress(address);
+    }
+
+    void call(Register reg)
+    {
+        switch(reg)
+        {
+            case Register::rax: EmitWord(0xffd0); break;
+            case Register::rbx: EmitWord(0xffd3); break;
+            case Register::rcx: EmitWord(0xffd1); break;
+            case Register::rdx: EmitWord(0xffd2); break;
+            case Register::rdi: EmitWord(0xffd7); break;
+            case Register::rsi: EmitWord(0xffd6); break;
+            case Register::rsp: EmitWord(0xffd4); break;
+            case Register::rbp: EmitWord(0xffd5); break;
+            case Register::r8:  Emit3Bytes(0x41ffd0); break;
+            case Register::r9:  Emit3Bytes(0x41ffd1); break;
+            case Register::r10: Emit3Bytes(0x41ffd2); break;
+            case Register::r11: Emit3Bytes(0x41ffd3); break;
+            case Register::r12: Emit3Bytes(0x41ffd4); break;
+            case Register::r13: Emit3Bytes(0x41ffd5); break;
+            case Register::r14: Emit3Bytes(0x41ffd6); break;
+            case Register::r15: Emit3Bytes(0x41ffd7); break;
+            default: assert(false && "Unhandled register in mov(reg, address)"); break;
+        }
+    }
+
+    // call to (already loaded) c function
+    void ccall(Register reg, void* address)
+    {
+        mov(reg, address);
+        call(reg);
+    }
+
+    void ret()
+    {
+        EmitByte(0xc3);
+    }
 };
 
 } // jitbox
