@@ -1,17 +1,16 @@
-# JitBox
-Ultra lightweight header-only jit with no external dependencies.
+#include <iostream>
+#include "jitbox.h"
 
-## Example:
-Given this simple c function as an example:
-```
-   int square (int i)
-   {
-     return i * i;
-   }
-```
+using namespace std;
 
-This is how you might generate this function in jitbox:
-```
+int main()
+{
+    // Generate equivalent of this function:
+    // int square (int i)
+    // {
+    //   return i * i;
+    // }
+
     jitbox::Module module = jitbox::Module("square_test");
 
     jitbox::ValueType return_type = jitbox::ValueType::i32;
@@ -30,12 +29,6 @@ This is how you might generate this function in jitbox:
     cout << "3 * 3 = "   << square(3) << endl;
     cout << "9 * 9 = "   << square(9) << endl;
     cout << "16 * 16 = " << square(16) << endl;
-```
 
-## Build and run examples:
-```bash
-g++ -std=c++11 examples/helloworld.cpp -Ijitbox/ -o hello
-./hello
-g++ -std=c++11 examples/square.cpp -Ijitbox/ -o square
-./square
-```
+    return 0;
+}
