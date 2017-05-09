@@ -32,6 +32,7 @@ enum class ValueType
   f32,
   f64,
   pointer,
+  none,
 };
 
 enum class StorageType

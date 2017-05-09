@@ -78,9 +78,18 @@ public:
         return binop(Instruction::div, lhs, rhs);
     }
 
+    void end_block_with_return()
+    {
+        m_gen->ret();
+    }
+
     void end_block_with_return(const Expression &expr)
     {
         // TODO: this won't scale to arbitrary expressions
+        //       possibly set return val directly instead, e.g.
+        // Value* return_val = func->get_return_value(ValueType::i32);
+        // func->mul(return_val, lhs, rhs);
+        // func->end_block_with_return();
         switch(expr.instruction)
         {
             case Instruction::mul:
@@ -90,6 +99,11 @@ public:
                 break;
         }
         m_gen->ret();
+    }
+
+    void call(void* address)
+    {
+        m_gen->ccall(Register::rax, address);
     }
 
     void finalize()
