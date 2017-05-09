@@ -1,7 +1,7 @@
 # JitBox
 Ultra lightweight header-only jit with no external dependencies.
 
-# Example:
+## Example:
 Given this simple c function as an example:
 ```
    int square (int i)
@@ -17,8 +17,6 @@ This is how you might generate this function in jitbox:
     jitbox::ValueType return_type = jitbox::ValueType::i32;
     jitbox::Function* func = module.new_function("square", return_type);
     jitbox::Value* x = func->new_param("x", jitbox::ValueType::i32);
-    // TODO: possibly set return val directly instead of end_block_with_return()
-    // jitbox::Value* return_value = func->get_return_value(jitbox::ValueType::i32);
 
     func->begin_block("entry");
     func->end_block_with_return(func->mul(x, x));
@@ -34,7 +32,7 @@ This is how you might generate this function in jitbox:
     cout << "16 * 16 = " << square(16) << endl;
 ```
 
-# Build and run included example:
+## Build and run a simple example:
 ```bash
 g++ -std=c++11 examples/jitbox_helloworld.cpp -Ijitbox/ -o hello
 ./hello
