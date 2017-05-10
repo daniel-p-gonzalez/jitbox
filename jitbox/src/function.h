@@ -11,23 +11,14 @@
 namespace jitbox
 {
 
-enum class Instruction
-{
-    add, sub, mul, div,
-};
-
-struct Expression
-{
-    std::vector<Value*> args;
-    Instruction instruction;
-};
-
 class Function
 {
 public:
     Function(std::string name, ValueType return_type, CodeGenerator* gen)
-    : m_name(name), m_return_type(return_type), m_gen(gen)
+    : m_name(name), m_return_type(return_type),
+      m_gen(gen), m_return_value(new Value("", return_type))
     {
+        m_return_value->set_register(m_gen->get_return_register());
     }
 
     Value* new_param(std::string name, ValueType type)
@@ -47,35 +38,22 @@ public:
         m_blocks[block_name] = m_gen->get_offset();
     }
 
-    // TODO: the following is only needed due to end_block_with_return needing
-    //  to support returning arbitrary expressions.
-    //  add explicit return value to avoid this
-    Expression binop(Instruction instr, Value* lhs, Value* rhs)
+    void mul(Value* dest, Value* lhs, Value* rhs)
     {
-        Expression expr;
-        expr.args.push_back(lhs); expr.args.push_back(rhs);
-        expr.instruction = instr;
-        return expr;
-    }
+        if( dest->get_value_type() >= ValueType::i8 &&
+            dest->get_value_type() <= ValueType::u64 )
+        {
+            assert(dest->get_value_type() == lhs->get_value_type());
+            assert(dest->get_value_type() == rhs->get_value_type());
 
-    Expression add(Value* lhs, Value* rhs)
-    {
-        return binop(Instruction::add, lhs, rhs);
-    }
-
-    Expression sub(Value* lhs, Value* rhs)
-    {
-        return binop(Instruction::sub, lhs, rhs);
-    }
-
-    Expression mul(Value* lhs, Value* rhs)
-    {
-        return binop(Instruction::mul, lhs, rhs);
-    }
-
-    Expression div(Value* lhs, Value* rhs)
-    {
-        return binop(Instruction::div, lhs, rhs);
+            m_gen->imul(dest->get_register(),
+                       lhs->get_register(),
+                       rhs->get_register());
+        }
+        else
+        {
+            assert(false && "Unsupported value type in mul(dest,lhs,rhs)");
+        }
     }
 
     void end_block_with_return()
@@ -83,22 +61,9 @@ public:
         m_gen->ret();
     }
 
-    void end_block_with_return(const Expression &expr)
+    Value* get_return_value()
     {
-        // TODO: this won't scale to arbitrary expressions
-        //       possibly set return val directly instead, e.g.
-        // Value* return_val = func->get_return_value(ValueType::i32);
-        // func->mul(return_val, lhs, rhs);
-        // func->end_block_with_return();
-        switch(expr.instruction)
-        {
-            case Instruction::mul:
-                m_gen->mul(Register::rax,
-                          expr.args[0]->get_register(),
-                          expr.args[1]->get_register());
-                break;
-        }
-        m_gen->ret();
+        return m_return_value.get();
     }
 
     void call(void* address)
@@ -121,6 +86,7 @@ private:
     std::string m_name;
     ValueType m_return_type;
     std::vector<std::unique_ptr<Value>> m_params;
+    std::unique_ptr<Value> m_return_value;
     CodeGenerator* m_gen;
 };
 

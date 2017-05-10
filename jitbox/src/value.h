@@ -56,15 +56,23 @@ public:
     return m_storage_type;
   }
 
-public:
-  const std::string m_name;
-  const ValueType m_value_type;
+  ValueType get_value_type()
+  {
+    return m_value_type;
+  }
+
+  std::string get_name()
+  {
+    return m_name;
+  }
 
 private:
+  const std::string m_name;
   size_t m_stack_offset;
   void* m_heap_location;
   Register m_register;
   StorageType m_storage_type;
+  const ValueType m_value_type;
 };
 
 } // namespace jitbox

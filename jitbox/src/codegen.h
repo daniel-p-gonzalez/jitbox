@@ -38,7 +38,8 @@ public:
     virtual void call(void* address) = 0;
     // call to (already loaded) c function
     virtual void ccall(Register reg, void* address) = 0;
-    virtual void mul(Register dest, Register lhs, Register rhs) = 0;
+    virtual void imul(Register dest, Register lhs, Register rhs) = 0;
+    virtual Register get_return_register() = 0;
     virtual void ret() = 0;
     // temp hack to work out end-to-end details
     typedef void (*BareFunction) (void);

@@ -16,9 +16,11 @@ int main()
     jitbox::ValueType return_type = jitbox::ValueType::i32;
     jitbox::Function* func = module.new_function("square", return_type);
     jitbox::Value* x = func->new_param("x", jitbox::ValueType::i32);
+    jitbox::Value* return_value = func->get_return_value();
 
     func->begin_block("entry");
-    func->end_block_with_return(func->mul(x, x));
+    func->mul(return_value, x, x);
+    func->end_block_with_return();
 
     module.compile();
 

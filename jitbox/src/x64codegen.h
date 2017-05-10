@@ -8,13 +8,37 @@ namespace jitbox
 class X64CodeGenerator : public CodeGenerator
 {
 public:
+    X64CodeGenerator() : CodeGenerator(), m_reg_idx(16)
+    {
+        m_reg_idx[(size_t)Register::rax] = 0;
+        m_reg_idx[(size_t)Register::rcx] = 1;
+        m_reg_idx[(size_t)Register::rdx] = 2;
+        m_reg_idx[(size_t)Register::rbx] = 3;
+        m_reg_idx[(size_t)Register::rsp] = 4;
+        m_reg_idx[(size_t)Register::rbp] = 5;
+        m_reg_idx[(size_t)Register::rsi] = 6;
+        m_reg_idx[(size_t)Register::rdi] = 7;
+        m_reg_idx[(size_t)Register::r8] = 8;
+        m_reg_idx[(size_t)Register::r9] = 9;
+        m_reg_idx[(size_t)Register::r10] = 10;
+        m_reg_idx[(size_t)Register::r11] = 11;
+        m_reg_idx[(size_t)Register::r12] = 12;
+        m_reg_idx[(size_t)Register::r13] = 13;
+        m_reg_idx[(size_t)Register::r14] = 14;
+        m_reg_idx[(size_t)Register::r15] = 15;
+    }
+
+    Register get_return_register()
+    {
+        return Register::rax;
+    }
+
     void mov(Register reg, long long value)
     {
-        switch(reg)
-        {
-            case Register::rdi: EmitInstruction(0x48c7c7, 3); break;
-            default: assert(false && "Unhandled register in mov(reg, value)"); break;
-        }
+        u8 reg_idx = m_reg_idx[(size_t)reg];
+        long long instr = 0x48c7c0 | (reg_idx >= 8 ? 0x010000 : 0);
+        reg_idx %= 8;
+        EmitInstruction(instr+reg_idx, 3);
         EmitValue(value, 4);
     }
 
@@ -38,51 +62,20 @@ public:
 
     void mov(Register reg, void* address)
     {
-        switch(reg)
-        {
-            case Register::rax: EmitInstruction(0x48b8, 2); break;
-            case Register::rbx: EmitInstruction(0x48bb, 2); break;
-            case Register::rcx: EmitInstruction(0x48b9, 2); break;
-            case Register::rdx: EmitInstruction(0x48ba, 2); break;
-            case Register::rdi: EmitInstruction(0x48bf, 2); break;
-            case Register::rsi: EmitInstruction(0x48be, 2); break;
-            case Register::rsp: EmitInstruction(0x48bc, 2); break;
-            case Register::rbp: EmitInstruction(0x48bd, 2); break;
-            case Register::r8:  EmitInstruction(0x49b8, 2); break;
-            case Register::r9:  EmitInstruction(0x49b9, 2); break;
-            case Register::r10: EmitInstruction(0x49ba, 2); break;
-            case Register::r11: EmitInstruction(0x49bb, 2); break;
-            case Register::r12: EmitInstruction(0x49bc, 2); break;
-            case Register::r13: EmitInstruction(0x49bd, 2); break;
-            case Register::r14: EmitInstruction(0x49be, 2); break;
-            case Register::r15: EmitInstruction(0x49bf, 2); break;
-            default: assert(false && "Unhandled register in mov(reg, address)"); break;
-        }
+        u8 reg_idx = m_reg_idx[(size_t)reg];
+        long long instr = 0x48b8 | (reg_idx >= 8 ? 0x0100 : 0);
+        reg_idx %= 8;
+        EmitInstruction(instr+reg_idx, 2);
         EmitAddress(address);
     }
 
     void call(Register reg)
     {
-        switch(reg)
-        {
-            case Register::rax: EmitInstruction(0xffd0, 2); break;
-            case Register::rbx: EmitInstruction(0xffd3, 2); break;
-            case Register::rcx: EmitInstruction(0xffd1, 2); break;
-            case Register::rdx: EmitInstruction(0xffd2, 2); break;
-            case Register::rdi: EmitInstruction(0xffd7, 2); break;
-            case Register::rsi: EmitInstruction(0xffd6, 2); break;
-            case Register::rsp: EmitInstruction(0xffd4, 2); break;
-            case Register::rbp: EmitInstruction(0xffd5, 2); break;
-            case Register::r8:  EmitInstruction(0x41ffd0, 3); break;
-            case Register::r9:  EmitInstruction(0x41ffd1, 3); break;
-            case Register::r10: EmitInstruction(0x41ffd2, 3); break;
-            case Register::r11: EmitInstruction(0x41ffd3, 3); break;
-            case Register::r12: EmitInstruction(0x41ffd4, 3); break;
-            case Register::r13: EmitInstruction(0x41ffd5, 3); break;
-            case Register::r14: EmitInstruction(0x41ffd6, 3); break;
-            case Register::r15: EmitInstruction(0x41ffd7, 3); break;
-            default: assert(false && "Unhandled register in mov(reg, address)"); break;
-        }
+        u8 reg_idx = m_reg_idx[(size_t)reg];
+        long long instr = 0xffd0 | (reg_idx >= 8 ? 0x410000 : 0);
+        size_t byte_count = reg_idx >= 8 ? 3 : 2;
+        reg_idx %= 8;
+        EmitInstruction(instr+reg_idx, byte_count);
     }
 
     // call to (already loaded) c function
@@ -97,23 +90,21 @@ public:
 
     }
 
-    void mul(Register dest, Register lhs, Register rhs)
+    void imul(Register dest, Register lhs, Register rhs)
     {
         mov(dest, lhs);
-        EmitInstruction(0x48f7, 2);
-        switch(rhs)
-        {
-            case Register::rdi: EmitInstruction(0xef, 1); break;
-            case Register::rsi: EmitInstruction(0xee, 1); break;
-            case Register::rdx: EmitInstruction(0xea, 1); break;
-            default: assert(false && "Unhandled register in mul(dest, lhs, rhs)"); break;
-        }
+        u8 reg_idx = m_reg_idx[(size_t)rhs];
+        long long instr = 0x48f7e8 | (reg_idx >= 8 ? 0x010000 : 0);
+        reg_idx %= 8;
+        EmitInstruction(instr+reg_idx, 3);
     }
 
     void ret()
     {
         EmitInstruction(0xc3, 1);
     }
+private:
+    std::vector<u8> m_reg_idx;
 };
 
 } // namespace jitbox

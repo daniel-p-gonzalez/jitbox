@@ -18,6 +18,7 @@ int main()
     jitbox::ValueType int_type = jitbox::ValueType::i32;
     jitbox::Function* func = module.new_function("fibonacci", int_type);
     jitbox::Value* x = func->new_param("x", jitbox::ValueType::i32);
+    jitbox::Value* return_value = func->get_return_value();
 
     const jitbox::Value* one = func->new_constant(int_type, 1);
     const jitbox::Value* two = func->new_constant(int_type, 2);
@@ -27,12 +28,14 @@ int main()
         func->branch_if_not(func->cmp_le(x, two), "recurse");
         // // x > 2 ?
         // func->branch_if(func->cmp_gt(x, two), "recurse");
-    func->end_block_with_return(one);
+        func->assign(return_value, one);
+    func->end_block_with_return();
 
     func->begin_block("recurse");
         jitbox::Value* fib1 = func->call(func, func->sub(x, one));
         jitbox::Value* fib2 = func->call(func, func->sub(x, two));
-    func->end_block_with_return(func->add(fib1, fib2));
+        func->add(return_value, fib1, fib2)
+    func->end_block_with_return();
 
     module.compile();
 
