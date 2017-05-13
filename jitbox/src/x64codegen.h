@@ -4,53 +4,97 @@
 namespace jitbox
 {
 
-// TODO: move mprotect to module, have functions own (dynamically allocated) mem
 class X64CodeGenerator : public CodeGenerator
 {
 public:
-    X64CodeGenerator() : CodeGenerator(), m_reg_idx(16)
+    X64CodeGenerator(bool dump_asm) : CodeGenerator(dump_asm)
     {
-        m_reg_idx[(size_t)Register::rax] = 0;
-        m_reg_idx[(size_t)Register::rcx] = 1;
-        m_reg_idx[(size_t)Register::rdx] = 2;
-        m_reg_idx[(size_t)Register::rbx] = 3;
-        m_reg_idx[(size_t)Register::rsp] = 4;
-        m_reg_idx[(size_t)Register::rbp] = 5;
-        m_reg_idx[(size_t)Register::rsi] = 6;
-        m_reg_idx[(size_t)Register::rdi] = 7;
-        m_reg_idx[(size_t)Register::r8] = 8;
-        m_reg_idx[(size_t)Register::r9] = 9;
-        m_reg_idx[(size_t)Register::r10] = 10;
-        m_reg_idx[(size_t)Register::r11] = 11;
-        m_reg_idx[(size_t)Register::r12] = 12;
-        m_reg_idx[(size_t)Register::r13] = 13;
-        m_reg_idx[(size_t)Register::r14] = 14;
-        m_reg_idx[(size_t)Register::r15] = 15;
+        m_reg_names.push_back("rax");
+        m_reg_names.push_back("rcx");
+        m_reg_names.push_back("rdx");
+        m_reg_names.push_back("rbx");
+        m_reg_names.push_back("rsp");
+        m_reg_names.push_back("rbp");
+        m_reg_names.push_back("rsi");
+        m_reg_names.push_back("rdi");
+        m_reg_names.push_back("r8");
+        m_reg_names.push_back("r9");
+        m_reg_names.push_back("r10");
+        m_reg_names.push_back("r11");
+        m_reg_names.push_back("r12");
+        m_reg_names.push_back("r13");
+        m_reg_names.push_back("r14");
+        m_reg_names.push_back("r15");
+
+        std::vector<Register> registers =
+        {
+             Register(7, RegisterFlag::GeneralPurpose | // rdi
+                         RegisterFlag::Parameter),
+             Register(6, RegisterFlag::GeneralPurpose | // rsi
+                         RegisterFlag::Parameter),
+             Register(2, RegisterFlag::GeneralPurpose | // rdx
+                         RegisterFlag::Parameter),
+             Register(1, RegisterFlag::GeneralPurpose | // rcx
+                         RegisterFlag::Parameter),
+             Register(8, RegisterFlag::GeneralPurpose | // r8
+                         RegisterFlag::Parameter),
+             Register(9, RegisterFlag::GeneralPurpose | // r9
+                         RegisterFlag::Parameter),
+             Register(10, RegisterFlag::GeneralPurpose), // r10
+             Register(11, RegisterFlag::GeneralPurpose), // r11
+             Register(12, RegisterFlag::GeneralPurpose | // r12
+                          RegisterFlag::Preserved),
+             Register(13, RegisterFlag::GeneralPurpose | // r13
+                          RegisterFlag::Preserved),
+             Register(14, RegisterFlag::GeneralPurpose | // r14
+                          RegisterFlag::Preserved),
+             Register(15, RegisterFlag::GeneralPurpose | // r15
+                          RegisterFlag::Preserved),
+             Register(0, RegisterFlag::GeneralPurpose | // rax
+                         RegisterFlag::Temp |
+                         RegisterFlag::Return),
+             Register(3, RegisterFlag::GeneralPurpose | // rbx
+                         RegisterFlag::Preserved),
+        };
+
+        m_storage_alloc.set_registers(registers);
     }
 
-    Register get_return_register()
+    std::string reg2str(Register reg)
     {
-        return Register::rax;
+        return m_reg_names[reg.idx];
     }
 
-    void mov(Register reg, long long value)
+    void mov(Register reg, i32 value)
     {
-        u8 reg_idx = m_reg_idx[(size_t)reg];
-        long long instr = 0x48c7c0 | (reg_idx >= 8 ? 0x010000 : 0);
-        reg_idx %= 8;
-        EmitInstruction(instr+reg_idx, 3);
+        if(m_dump_asm)
+            std::cout << "  mov " << reg2str(reg) << ", " << value << std::endl;
+
+        u64 instr = 0x48c7c0 + (reg.idx >= 8 ? 0x010000 : 0);
+        reg.idx %= 8;
+        EmitInstruction(instr+reg.idx, 3);
         EmitValue(value, 4);
     }
 
     void mov(Register dest, Register src)
     {
+        if( dest.idx == src.idx )
+        {
+            return;
+        }
+
+        if(m_dump_asm)
+            std::cout << "  mov " << reg2str(dest) << ", " << reg2str(src) << std::endl;
+
         EmitInstruction(0x4889, 2);
         // TODO: support arbitrary pairs
-        if( dest == Register::rax && src == Register::rdi )
+        // if( dest == Register::rax && src == Register::rdi )
+        if( dest.idx == 0 && src.idx == 7 )
         {
             EmitInstruction(0xf8, 1);
         }
-        else if( dest == Register::rax && src == Register::rsi )
+        // else if( dest == Register::rax && src == Register::rsi )
+        else if( dest.idx == 0 && src.idx == 6 )
         {
             EmitInstruction(0xf0, 1);
         }
@@ -62,49 +106,150 @@ public:
 
     void mov(Register reg, void* address)
     {
-        u8 reg_idx = m_reg_idx[(size_t)reg];
-        long long instr = 0x48b8 | (reg_idx >= 8 ? 0x0100 : 0);
-        reg_idx %= 8;
-        EmitInstruction(instr+reg_idx, 2);
+        if(m_dump_asm)
+            std::cout << "  mov " << reg2str(reg) << ", " << address << std::endl;
+
+        u64 instr = 0x48b8 + (reg.idx >= 8 ? 0x0100 : 0);
+        reg.idx %= 8;
+        EmitInstruction(instr+reg.idx, 2);
         EmitAddress(address);
     }
 
     void call(Register reg)
     {
-        u8 reg_idx = m_reg_idx[(size_t)reg];
-        long long instr = 0xffd0 | (reg_idx >= 8 ? 0x410000 : 0);
-        size_t byte_count = reg_idx >= 8 ? 3 : 2;
-        reg_idx %= 8;
-        EmitInstruction(instr+reg_idx, byte_count);
+        if(m_dump_asm)
+            std::cout << "  call " << reg2str(reg) << std::endl;
+
+        u64 instr = 0xffd0 + (reg.idx >= 8 ? 0x410000 : 0);
+        size_t byte_count = reg.idx >= 8 ? 3 : 2;
+        reg.idx %= 8;
+        EmitInstruction(instr+reg.idx, byte_count);
     }
 
-    // call to (already loaded) c function
-    void ccall(Register reg, void* address)
+    // TODO: this is unecessary once linking is implemented
+    void call(void* address)
     {
+        Value* temp = m_storage_alloc.alloc_temp(ValueType::pointer);
+        Register reg = temp->get_register();
         mov(reg, address);
         call(reg);
     }
 
-    void call(void* address)
+    // TODO: refactor arithmetic ops to remove redundency
+    Value* imul(Value* lhs, Value* rhs)
     {
+        // no destination passed in, so grab a temp register
+        Value* result = m_storage_alloc.alloc_temp(lhs->value_type);
+        Register src = lhs->get_register();
+        Register dest = result->get_register();
+        mov(dest, src);
 
+        Register rhs_reg = rhs->get_register();
+        auto reg_idx = rhs_reg.idx;
+        u64 instr = 0x48f7e8 + (reg_idx >= 8 ? 0x010000 : 0);
+        reg_idx %= 8;
+
+        if(m_dump_asm)
+            std::cout << "  imul " << reg2str(rhs_reg) << std::endl;
+
+        EmitInstruction(instr+reg_idx, 3);
+        return result;
     }
 
-    void imul(Register dest, Register lhs, Register rhs)
+    Value* idiv(Value* lhs, Value* rhs)
     {
-        mov(dest, lhs);
-        u8 reg_idx = m_reg_idx[(size_t)rhs];
-        long long instr = 0x48f7e8 | (reg_idx >= 8 ? 0x010000 : 0);
+        // no destination passed in, so grab a temp register
+        Value* result = m_storage_alloc.alloc_temp(lhs->value_type);
+        Register src = lhs->get_register();
+        Register dest = result->get_register();
+        mov(dest, src);
+
+        // sign extend rax to rdx:rax
+        // TODO: this special case needs to go through storagealloc in
+        //       some way to ensure anything in rdx is spilled out to stack
+        if(m_dump_asm)
+            std::cout << "  cqo" << std::endl;
+        EmitInstruction(0x4899, 2);
+
+        Register rhs_reg = rhs->get_register();
+        auto reg_idx = rhs_reg.idx;
+        u64 instr = 0x48f7f8 + (reg_idx >= 8 ? 0x010000 : 0);
         reg_idx %= 8;
+
+        if(m_dump_asm)
+            std::cout << "  idiv " << reg2str(rhs_reg) << std::endl;
+
         EmitInstruction(instr+reg_idx, 3);
+        return result;
+    }
+
+    Value* add(Value* lhs, Value* rhs)
+    {
+        // no destination passed in, so grab a temp register
+        Value* result = m_storage_alloc.alloc_temp(lhs->value_type);
+        Register src = lhs->get_register();
+        Register dest = result->get_register();
+        mov(dest, src);
+
+        Register rhs_reg = rhs->get_register();
+        auto reg_idx = rhs_reg.idx;
+        u64 instr = 0x4801c0 + (reg_idx >= 8 ? 0x040000 : 0);
+        reg_idx %= 8;
+
+        if(m_dump_asm)
+            std::cout << "  add " << reg2str(dest) << ", "
+                      << reg2str(rhs_reg) << std::endl;
+
+        EmitInstruction(instr+reg_idx*8, 3);
+        return result;
+    }
+
+    Value* sub(Value* lhs, Value* rhs)
+    {
+        // no destination passed in, so grab a temp register
+        Value* result = m_storage_alloc.alloc_temp(lhs->value_type);
+        Register src = lhs->get_register();
+        Register dest = result->get_register();
+        mov(dest, src);
+
+        Register rhs_reg = rhs->get_register();
+        auto reg_idx = rhs_reg.idx;
+        u64 instr = 0x4829c0 + (reg_idx >= 8 ? 0x040000 : 0);
+        reg_idx %= 8;
+
+        if(m_dump_asm)
+            std::cout << "  sub " << reg2str(dest) << ", "
+                      << reg2str(rhs_reg) << std::endl;
+
+        EmitInstruction(instr+reg_idx*8, 3);
+        return result;
+    }
+
+    void ret(Value* value)
+    {
+        // allocate return register (rax)
+        Value* result = m_storage_alloc.alloc_return(value->value_type);
+        // mov rax, value_register (assuming it lives in register for now)
+        Register src = value->get_register();
+        Register dest = result->get_register();
+        mov(dest, src);
+
+        if(m_dump_asm)
+            std::cout << "  ret" << std::endl;
+
+        EmitInstruction(0xc3, 1);
     }
 
     void ret()
     {
+        if(m_dump_asm)
+            std::cout << "  ret" << std::endl;
+
         EmitInstruction(0xc3, 1);
     }
+
 private:
-    std::vector<u8> m_reg_idx;
+    std::vector<std::string> m_reg_names;
 };
 
 } // namespace jitbox

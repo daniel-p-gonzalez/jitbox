@@ -17,11 +17,9 @@ This is how you might generate this function in jitbox:
     jitbox::ValueType return_type = jitbox::ValueType::i32;
     jitbox::Function* func = module.new_function("square", return_type);
     jitbox::Value* x = func->new_param("x", jitbox::ValueType::i32);
-    jitbox::Value* return_value = func->get_return_value();
 
     func->begin_block("entry");
-    func->mul(return_value, x, x);
-    func->end_block_with_return();
+    func->end_block_with_return(func->mul(x, x));
 
     module.compile();
 
