@@ -28,14 +28,12 @@ int main()
         func->branch_if_not(func->cmp_le(x, two), "recurse");
         // // x > 2 ?
         // func->branch_if(func->cmp_gt(x, two), "recurse");
-        func->assign(return_value, one);
-    func->end_block_with_return();
+    func->end_block_with_return(one);
 
     func->begin_block("recurse");
         jitbox::Value* fib1 = func->call(func, func->sub(x, one));
         jitbox::Value* fib2 = func->call(func, func->sub(x, two));
-        func->add(return_value, fib1, fib2)
-    func->end_block_with_return();
+    func->end_block_with_return(func->add(fib1, fib2));
 
     module.compile();
 

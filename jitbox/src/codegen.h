@@ -1,5 +1,6 @@
 #pragma once
 #include "coretypes.h"
+#include "storagealloc.h"
 
 namespace jitbox
 {
@@ -7,7 +8,8 @@ namespace jitbox
 class CodeGenerator
 {
 public:
-    CodeGenerator() : m_mem(nullptr), m_page_count(0)
+    CodeGenerator(bool dump_asm)
+        : m_mem(nullptr), m_page_count(0), m_dump_asm(dump_asm)
     {
     }
 
@@ -26,28 +28,43 @@ public:
     }
 
     // return index of next instruction
-    size_t get_offset()
+    size_t get_label_offset(std::string label)
     {
+        if(m_dump_asm)
+            std::cout << label << ":" << std::endl;
+
         return m_code.size();
+    }
+
+    Value* alloc_param(std::string name, ValueType type)
+    {
+        return m_storage_alloc.alloc_param(name, type);
+    }
+
+    Value* alloc_local(std::string name, ValueType type)
+    {
+        return m_storage_alloc.alloc_local(name, type);
+    }
+
+    Value* alloc_constant(ValueType type, i32 value)
+    {
+        auto constant = m_storage_alloc.alloc_local("", type);
+        mov(constant->get_register(), value);
+
+        return constant;
     }
 
     virtual void mov(Register dest, Register src) = 0;
     virtual void mov(Register reg, void* address) = 0;
-    virtual void mov(Register reg, long long value) = 0;
+    virtual void mov(Register reg, i32 value) = 0;
     virtual void call(Register reg) = 0;
     virtual void call(void* address) = 0;
-    // call to (already loaded) c function
-    virtual void ccall(Register reg, void* address) = 0;
-    virtual void imul(Register dest, Register lhs, Register rhs) = 0;
-    virtual Register get_return_register() = 0;
+    virtual Value* add(Value* lhs, Value* rhs) = 0;
+    virtual Value* sub(Value* lhs, Value* rhs) = 0;
+    virtual Value* imul(Value* lhs, Value* rhs) = 0;
+    virtual Value* idiv(Value* lhs, Value* rhs) = 0;
+    virtual void ret(Value* value) = 0;
     virtual void ret() = 0;
-    // temp hack to work out end-to-end details
-    typedef void (*BareFunction) (void);
-    void run()
-    {
-        BareFunction fun = (BareFunction)m_mem;
-        fun();
-    }
 
     void* get_code()
     {
@@ -55,7 +72,7 @@ public:
     }
 
 protected:
-    void EmitInstruction(long long instruction, size_t size)
+    void EmitInstruction(u64 instruction, size_t size)
     {
       assert(size > 0);
       for( int i = size - 1; i >= 0; --i )
@@ -64,7 +81,7 @@ protected:
       }
     }
 
-    void EmitValue(long long value, size_t size)
+    void EmitValue(u64 value, size_t size)
     {
       for( size_t i = 0; i < size; ++i )
       {
@@ -77,6 +94,9 @@ protected:
         size_t address = (size_t)_address;
         EmitValue(address, 8);
     }
+
+    StorageAllocator m_storage_alloc;
+    bool m_dump_asm;
 
 private:
     std::vector<u8> m_code;
