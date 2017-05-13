@@ -32,7 +32,9 @@ public:
                          RegisterFlag::Parameter),
              Register(6, RegisterFlag::GeneralPurpose | // rsi
                          RegisterFlag::Parameter),
-             Register(2, RegisterFlag::GeneralPurpose | // rdx
+             // TODO: rdx used for mul/div, commenting out general use
+             //        until register spill is handled properly
+             Register(2, //RegisterFlag::GeneralPurpose | // rdx
                          RegisterFlag::Parameter),
              Register(1, RegisterFlag::GeneralPurpose | // rcx
                          RegisterFlag::Parameter),
@@ -71,8 +73,8 @@ public:
             std::cout << "  mov " << reg2str(reg) << ", " << value << std::endl;
 
         u64 instr = 0x48c7c0 + (reg.idx >= 8 ? 0x010000 : 0);
-        reg.idx %= 8;
-        EmitInstruction(instr+reg.idx, 3);
+        u8 offset = reg.idx % 8;
+        EmitInstruction(instr+offset, 3);
         EmitValue(value, 4);
     }
 
@@ -86,22 +88,11 @@ public:
         if(m_dump_asm)
             std::cout << "  mov " << reg2str(dest) << ", " << reg2str(src) << std::endl;
 
-        EmitInstruction(0x4889, 2);
-        // TODO: support arbitrary pairs
-        // if( dest == Register::rax && src == Register::rdi )
-        if( dest.idx == 0 && src.idx == 7 )
-        {
-            EmitInstruction(0xf8, 1);
-        }
-        // else if( dest == Register::rax && src == Register::rsi )
-        else if( dest.idx == 0 && src.idx == 6 )
-        {
-            EmitInstruction(0xf0, 1);
-        }
-        else
-        {
-            assert(false && "Unhandled register in mov(reg, src)");
-        }
+        u64 instr = 0x4889c0 + (dest.idx >= 8 ? 0x010000 : 0)
+                             + (src.idx >= 8 ? 0x040000 : 0);
+        u8 dest_offset = dest.idx % 8;
+        u8 src_offset = src.idx % 8;
+        EmitInstruction(instr+dest_offset+src_offset*8, 3);
     }
 
     void mov(Register reg, void* address)
@@ -110,8 +101,8 @@ public:
             std::cout << "  mov " << reg2str(reg) << ", " << address << std::endl;
 
         u64 instr = 0x48b8 + (reg.idx >= 8 ? 0x0100 : 0);
-        reg.idx %= 8;
-        EmitInstruction(instr+reg.idx, 2);
+        u8 offset = reg.idx % 8;
+        EmitInstruction(instr+offset, 2);
         EmitAddress(address);
     }
 
@@ -122,8 +113,8 @@ public:
 
         u64 instr = 0xffd0 + (reg.idx >= 8 ? 0x410000 : 0);
         size_t byte_count = reg.idx >= 8 ? 3 : 2;
-        reg.idx %= 8;
-        EmitInstruction(instr+reg.idx, byte_count);
+        u8 offset = reg.idx % 8;
+        EmitInstruction(instr+offset, byte_count);
     }
 
     // TODO: this is unecessary once linking is implemented
@@ -192,15 +183,17 @@ public:
         mov(dest, src);
 
         Register rhs_reg = rhs->get_register();
-        auto reg_idx = rhs_reg.idx;
-        u64 instr = 0x4801c0 + (reg_idx >= 8 ? 0x040000 : 0);
-        reg_idx %= 8;
+
+        u64 instr = 0x4801c0 + (dest.idx >= 8 ? 0x010000 : 0)
+                             + (rhs_reg.idx >= 8 ? 0x040000 : 0);
+        u8 dest_offset = dest.idx % 8;
+        u8 rhs_offset = rhs_reg.idx % 8;
 
         if(m_dump_asm)
             std::cout << "  add " << reg2str(dest) << ", "
                       << reg2str(rhs_reg) << std::endl;
 
-        EmitInstruction(instr+reg_idx*8, 3);
+        EmitInstruction(instr+dest_offset+rhs_offset*8, 3);
         return result;
     }
 
@@ -213,15 +206,17 @@ public:
         mov(dest, src);
 
         Register rhs_reg = rhs->get_register();
-        auto reg_idx = rhs_reg.idx;
-        u64 instr = 0x4829c0 + (reg_idx >= 8 ? 0x040000 : 0);
-        reg_idx %= 8;
+
+        u64 instr = 0x4829c0 + (dest.idx >= 8 ? 0x010000 : 0)
+                             + (rhs_reg.idx >= 8 ? 0x040000 : 0);
+        u8 dest_offset = dest.idx % 8;
+        u8 rhs_offset = rhs_reg.idx % 8;
 
         if(m_dump_asm)
             std::cout << "  sub " << reg2str(dest) << ", "
                       << reg2str(rhs_reg) << std::endl;
 
-        EmitInstruction(instr+reg_idx*8, 3);
+        EmitInstruction(instr+dest_offset+rhs_offset*8, 3);
         return result;
     }
 
