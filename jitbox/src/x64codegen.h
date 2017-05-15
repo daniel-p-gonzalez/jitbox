@@ -106,24 +106,14 @@ public:
         EmitAddress(address);
     }
 
-    void call(Register reg)
-    {
-        if(m_dump_asm)
-            std::cout << "  call " << reg2str(reg) << std::endl;
-
-        u64 instr = 0xffd0 + (reg.idx >= 8 ? 0x410000 : 0);
-        size_t byte_count = reg.idx >= 8 ? 3 : 2;
-        u8 offset = reg.idx % 8;
-        EmitInstruction(instr+offset, byte_count);
-    }
-
-    // TODO: this is unecessary once linking is implemented
     void call(void* address)
     {
-        Value* temp = m_storage_alloc.alloc_temp(ValueType::pointer);
-        Register reg = temp->get_register();
-        mov(reg, address);
-        call(reg);
+        if(m_dump_asm)
+            std::cout << "  call " << address << " ; c function" << std::endl;
+
+        EmitInstruction(0xe8, 1);
+        m_addresses_to_patch.push_back(get_offset());
+        EmitValue((u32)(size_t)address, 4);
     }
 
     // TODO: refactor arithmetic ops to remove redundency

@@ -18,6 +18,8 @@ int main()
 
     jitbox::Module module = jitbox::Module("helloworld");
 
+    // module.set_option(jitbox::JitOption::DUMP_ASM, true);
+
     jitbox::ValueType return_type = jitbox::ValueType::none;
     jitbox::Function* func = module.new_function("hello", return_type);
     jitbox::Value* str = func->new_param("str", jitbox::ValueType::pointer);
