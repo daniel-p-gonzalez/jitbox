@@ -18,7 +18,6 @@ int main()
     jitbox::ValueType int_type = jitbox::ValueType::i32;
     jitbox::Function* func = module.new_function("fibonacci", int_type);
     jitbox::Value* x = func->new_param("x", jitbox::ValueType::i32);
-    jitbox::Value* return_value = func->get_return_value();
 
     const jitbox::Value* one = func->new_constant(int_type, 1);
     const jitbox::Value* two = func->new_constant(int_type, 2);
