@@ -13,6 +13,8 @@ public:
     {
     }
 
+    StorageAllocator(const StorageAllocator &other) = delete;
+
     void set_registers(const std::vector<Register> &registers)
     {
         m_registers = registers;
